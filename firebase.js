@@ -2,11 +2,9 @@
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+import { getStorage } from "firebase/storage"; // Import Firebase Storage
 
 // Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
   apiKey: "AIzaSyCyd09n40MIkDKntmz-tM8QDD2lKeoQDzk",
   authDomain: "inventory-tracker-3dbba.firebaseapp.com",
@@ -21,5 +19,6 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const firestore = getFirestore(app);
+const storage = getStorage(app); // Initialize Firebase Storage
 
-export { auth, firestore };
+export { auth, firestore, storage };

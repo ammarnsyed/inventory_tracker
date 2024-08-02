@@ -1,7 +1,7 @@
 // page.js
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { firestore, auth } from "@/firebase";
+import { firestore, auth, storage } from "@/firebase";
 import {
   collection,
   query,
@@ -12,6 +12,7 @@ import {
   deleteDoc,
 } from "firebase/firestore";
 import { onAuthStateChanged, signOut } from "firebase/auth";
+import { ref, uploadString, getDownloadURL } from "firebase/storage"; // Import functions for Firebase Storage
 import {
   Box,
   Typography,
@@ -31,7 +32,7 @@ import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import CameraAltIcon from "@mui/icons-material/CameraAlt";
-import Camera from "react-camera-pro";
+import { Camera } from "react-camera-pro"; // Import Camera from react-camera-pro
 import Auth from "./Auth"; // Import the Auth component for user authentication
 
 // Styled Components
@@ -49,10 +50,6 @@ const StyledBox = styled(Box)({
 });
 
 const StyledModalBox = styled(motion.div)({
-  position: "absolute",
-  top: "50%",
-  left: "50%",
-  transform: "translate(-50%, -50%)",
   width: "90%",
   maxWidth: 400,
   backgroundColor: "white",
@@ -105,6 +102,7 @@ const Home = () => {
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [snackbarSeverity, setSnackbarSeverity] = useState("success");
   const [searchQuery, setSearchQuery] = useState(""); // State for search query
+  const [capturedImage, setCapturedImage] = useState(null); // State to store captured image
 
   const cameraRef = useRef(null); // Create a reference for the camera
 
@@ -129,7 +127,7 @@ const Home = () => {
   };
 
   const addItem = async (item, count) => {
-    if (!user) return;
+    if (!user || !item) return; // Ensure user and item are defined
     const normalizedItem = item.toLowerCase();
     const docRef = doc(
       collection(firestore, `users/${user.uid}/inventory`),
@@ -147,8 +145,8 @@ const Home = () => {
   };
 
   const removeItem = async (item, count) => {
-    if (!user) return;
-    const normalizedItem = item.toLowerCase();
+    if (!user || !item || !item.name) return; // Ensure user and item are defined
+    const normalizedItem = item.name.toLowerCase();
     const docRef = doc(
       collection(firestore, `users/${user.uid}/inventory`),
       normalizedItem
@@ -167,9 +165,9 @@ const Home = () => {
   };
 
   const editItem = async (originalName, newName, newCount) => {
-    if (!user) return;
+    if (!user || !originalName) return; // Ensure user and originalName are defined
     if (originalName !== newName) {
-      await removeItem(originalName, Infinity);
+      await removeItem({ name: originalName }, Infinity);
       await addItem(newName, newCount);
     } else {
       const docRef = doc(
@@ -200,7 +198,9 @@ const Home = () => {
     setDeleteCount(1);
     setOpenDeleteModal(true);
   };
+
   const handleCloseDeleteModal = () => setOpenDeleteModal(false);
+
   const handleDeleteItem = () => {
     if (selectedItem && deleteCount > 0) {
       removeItem(selectedItem, parseInt(deleteCount, 10));
@@ -230,10 +230,34 @@ const Home = () => {
 
   const handleOpenScanModal = () => setOpenScanModal(true);
   const handleCloseScanModal = () => setOpenScanModal(false);
-  const handleCapture = () => {
-    const imageSrc = cameraRef.current.takePhoto();
-    console.log("Captured Image:", imageSrc);
-    // Process the image (e.g., analyze, upload, or save it)
+  const handleCapture = async () => {
+    if (cameraRef.current) {
+      try {
+        const imageSrc = cameraRef.current.takePhoto();
+        setCapturedImage(imageSrc); // Store the captured image in state
+        console.log("Captured Image:", imageSrc);
+
+        // Upload image to Firebase Storage
+        const storageRef = ref(storage, `images/${Date.now()}.jpg`);
+        await uploadString(storageRef, imageSrc, 'data_url');
+        const downloadURL = await getDownloadURL(storageRef);
+
+        console.log("Image uploaded to Firebase Storage:", downloadURL);
+        setSnackbarMessage("Image uploaded successfully!");
+        setSnackbarSeverity("success");
+        setOpenSnackbar(true);
+      } catch (error) {
+        console.error("Error capturing or uploading image:", error);
+        setSnackbarMessage("Error capturing or uploading image. Please try again.");
+        setSnackbarSeverity("error");
+        setOpenSnackbar(true);
+      }
+    } else {
+      console.error("No camera device accessible.");
+      setSnackbarMessage("No camera device accessible. Please connect your camera or try a different browser.");
+      setSnackbarSeverity("error");
+      setOpenSnackbar(true);
+    }
   };
 
   const handleSignOut = async () => {
@@ -330,25 +354,28 @@ const Home = () => {
                 backgroundColor: "rgba(0, 0, 0, 0.5)",
               },
             }}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }} // Center the modal
           >
-            <StyledModalBox
-              initial={{ opacity: 0, y: -50 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3 }}
-            >
-              <Typography variant="h6" component="h2" id="scan-item-modal">
-                Scan Item
-              </Typography>
-              <Camera
-                ref={cameraRef}
-                facingMode="environment"
-                aspectRatio={16 / 9}
-              />
-              <Box display="flex" justifyContent="flex-end" gap={1}>
-                <Button onClick={handleCloseScanModal}>Cancel</Button>
-                <StyledButton onClick={handleCapture}>Capture</StyledButton>
-              </Box>
-            </StyledModalBox>
+            <Box display="flex" alignItems="center" justifyContent="center" height="100vh">
+              <StyledModalBox
+                initial={{ opacity: 0, y: -50 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                <Typography variant="h6" component="h2" id="scan-item-modal">
+                  Scan Item
+                </Typography>
+                <Camera
+                  ref={cameraRef}
+                  facingMode="environment"
+                  aspectRatio={16 / 9}
+                />
+                <Box display="flex" justifyContent="flex-end" gap={1}>
+                  <Button onClick={handleCloseScanModal}>Cancel</Button>
+                  <StyledButton onClick={handleCapture}>Capture</StyledButton>
+                </Box>
+              </StyledModalBox>
+            </Box>
           </Modal>
 
           {/* Add Modal */}
@@ -362,37 +389,40 @@ const Home = () => {
                 backgroundColor: "rgba(0, 0, 0, 0.5)",
               },
             }}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }} // Center the modal
           >
-            <StyledModalBox
-              initial={{ opacity: 0, y: -50 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3 }}
-            >
-              <Typography variant="h6" component="h2" id="add-item-modal" sx={{ mb: 2 }}>
-                Add Item
-              </Typography>
-              <TextField 
-                fullWidth
-                variant="outlined"
-                label="Item Name"
-                value={itemName}
-                onChange={(e) => setItemName(e.target.value)}
-                margin="normal"
-              />
-              <TextField
-                fullWidth
-                variant="outlined"
-                label="Item Count"
-                type="number"
-                value={itemCount}
-                onChange={(e) => setItemCount(e.target.value)}
-                margin="normal"
-              />
-              <Box display="flex" justifyContent="center" gap={1} mt={2}>
-                <Button onClick={handleCloseAddModal}>Cancel</Button>
-                <StyledButton onClick={handleAddItem}>Add</StyledButton>
-              </Box>
-            </StyledModalBox>
+            <Box display="flex" alignItems="center" justifyContent="center" height="100vh">
+              <StyledModalBox
+                initial={{ opacity: 0, y: -50 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                <Typography variant="h6" component="h2" id="add-item-modal" sx={{ mb: 2 }}>
+                  Add Item
+                </Typography>
+                <TextField 
+                  fullWidth
+                  variant="outlined"
+                  label="Item Name"
+                  value={itemName}
+                  onChange={(e) => setItemName(e.target.value)}
+                  margin="normal"
+                />
+                <TextField
+                  fullWidth
+                  variant="outlined"
+                  label="Item Count"
+                  type="number"
+                  value={itemCount}
+                  onChange={(e) => setItemCount(e.target.value)}
+                  margin="normal"
+                />
+                <Box display="flex" justifyContent="center" gap={1} mt={2}>
+                  <Button onClick={handleCloseAddModal}>Cancel</Button>
+                  <StyledButton onClick={handleAddItem}>Add</StyledButton>
+                </Box>
+              </StyledModalBox>
+            </Box>
           </Modal>
 
           {/* Delete Modal */}
@@ -406,29 +436,32 @@ const Home = () => {
                 backgroundColor: "rgba(0, 0, 0, 0.5)",
               },
             }}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }} // Center the modal
           >
-            <StyledModalBox
-              initial={{ opacity: 0, y: -50 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3 }}
-            >
-              <Typography variant="h6" component="h2" id="delete-item-modal">
-                Remove Item
-              </Typography>
-              <TextField
-                fullWidth
-                variant="outlined"
-                label="Count to Remove"
-                type="number"
-                value={deleteCount}
-                onChange={(e) => setDeleteCount(e.target.value)}
-                margin="normal"
-              />
-              <Box display="flex" justifyContent="flex-end" gap={1}>
-                <Button onClick={handleCloseDeleteModal}>Cancel</Button>
-                <StyledButton onClick={handleDeleteItem}>Remove</StyledButton>
-              </Box>
-            </StyledModalBox>
+            <Box display="flex" alignItems="center" justifyContent="center" height="100vh">
+              <StyledModalBox
+                initial={{ opacity: 0, y: -50 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                <Typography variant="h6" component="h2" id="delete-item-modal">
+                  Remove Item
+                </Typography>
+                <TextField
+                  fullWidth
+                  variant="outlined"
+                  label="Count to Remove"
+                  type="number"
+                  value={deleteCount}
+                  onChange={(e) => setDeleteCount(e.target.value)}
+                  margin="normal"
+                />
+                <Box display="flex" justifyContent="flex-end" gap={1}>
+                  <Button onClick={handleCloseDeleteModal}>Cancel</Button>
+                  <StyledButton onClick={handleDeleteItem}>Remove</StyledButton>
+                </Box>
+              </StyledModalBox>
+            </Box>
           </Modal>
 
           {/* Edit Modal */}
@@ -442,37 +475,40 @@ const Home = () => {
                 backgroundColor: "rgba(0, 0, 0, 0.5)",
               },
             }}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }} // Center the modal
           >
-            <StyledModalBox
-              initial={{ opacity: 0, y: -50 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3 }}
-            >
-              <Typography variant="h6" component="h2" id="edit-item-modal">
-                Edit Item
-              </Typography>
-              <TextField
-                fullWidth
-                variant="outlined"
-                label="New Item Name"
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                margin="normal"
-              />
-              <TextField
-                fullWidth
-                variant="outlined"
-                label="New Item Count"
-                type="number"
-                value={editCount}
-                onChange={(e) => setEditCount(e.target.value)}
-                margin="normal"
-              />
-              <Box display="flex" justifyContent="flex-end" gap={1}>
-                <Button onClick={handleCloseEditModal}>Cancel</Button>
-                <StyledButton onClick={handleEditItem}>Save</StyledButton>
-              </Box>
-            </StyledModalBox>
+            <Box display="flex" alignItems="center" justifyContent="center" height="100vh">
+              <StyledModalBox
+                initial={{ opacity: 0, y: -50 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                <Typography variant="h6" component="h2" id="edit-item-modal">
+                  Edit Item
+                </Typography>
+                <TextField
+                  fullWidth
+                  variant="outlined"
+                  label="New Item Name"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  margin="normal"
+                />
+                <TextField
+                  fullWidth
+                  variant="outlined"
+                  label="New Item Count"
+                  type="number"
+                  value={editCount}
+                  onChange={(e) => setEditCount(e.target.value)}
+                  margin="normal"
+                />
+                <Box display="flex" justifyContent="flex-end" gap={1}>
+                  <Button onClick={handleCloseEditModal}>Cancel</Button>
+                  <StyledButton onClick={handleEditItem}>Save</StyledButton>
+                </Box>
+              </StyledModalBox>
+            </Box>
           </Modal>
 
           {/* Inventory Grid */}
@@ -494,7 +530,7 @@ const Home = () => {
                       </IconButton>
                       <IconButton
                         color="secondary"
-                        onClick={() => handleOpenDeleteModal(item.name)}
+                        onClick={() => handleOpenDeleteModal(item)}
                       >
                         <DeleteIcon />
                       </IconButton>

@@ -369,10 +369,10 @@ const Home = () => {
           p={4}
         >
           <Typography variant="h2" color="white" mb={2} textAlign="center">
-            Welcome to Your Inventory Manager
+            Welcome to Your Pantry Manager
           </Typography>
           <Typography variant="h6" color="white" mb={4} textAlign="center">
-            Manage your inventory with ease and style!
+            Manage your pantry with ease and style!
           </Typography>
           <Auth onUserChange={(user) => user && updateInventory(user.uid)} />
         </Box>
@@ -380,7 +380,7 @@ const Home = () => {
         <>
           <Box display="flex" flexDirection="column" alignItems="center" width="100%">
             <Typography variant="h2" gutterBottom>
-              Inventory Tracker
+              Pantry Tracker
             </Typography>
             <StyledSearchField
               variant="outlined"
